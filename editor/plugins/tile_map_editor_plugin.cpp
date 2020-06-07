@@ -319,8 +319,33 @@ void TileMapEditor::_set_cell(const Point2i &p_pos, Vector<int> p_values, bool p
 		position = prev_position;
 	}
 
-	if (p_value == prev_val && p_flip_h == prev_flip_h && p_flip_v == prev_flip_v && p_transpose == prev_transpose && prev_position == position)
-		return; // Check that it's actually different.
+	if (node->get_tileset()->tile_get_tile_mode(p_value) == TileSet::AUTO_TILE && !manual_autotile) {
+		if (p_value != -1 && prev_val != -1) {
+			Map<uint8_t, uint32_t> prev_bitmask = node->get_tileset()->autotile_get_bitmask(prev_val, prev_position);
+			Map<uint8_t, uint32_t> cur_bitmask = node->get_tileset()->autotile_get_bitmask(p_value, position);
+			int prev_layer = node->get_tileset()->get_tile_mask_layer(prev_bitmask, TileSet::BIND_TOPLEFT);
+			int cur_layer = node->get_tileset()->get_tile_mask_layer(cur_bitmask, TileSet::BIND_TOPLEFT);
+			if (prev_val == p_value && prev_layer != -1 && prev_layer == cur_layer) {
+				return;
+			} else {
+				Map<uint8_t, uint32_t> new_bitmask;
+				for (Map<uint8_t, uint32_t>::Element *E = prev_bitmask.front(); E; E = E->next()) {
+					if (E->key() == cur_layer) {
+						new_bitmask[E->key()] = E->value() | TileSet::BIND_TOPLEFT;
+					} else {
+						new_bitmask[E->key()] = E->value() & (~TileSet::BIND_TOPLEFT);
+					}
+				}
+				if (!new_bitmask.has(cur_layer)) {
+					new_bitmask[cur_layer] = TileSet::BIND_TOPLEFT;
+				}
+				position = node->get_tileset()->autotile_get_subtile_for_bitmask(p_value, new_bitmask, node, Vector2(p_pos.x, p_pos.y), position);
+			}
+		}
+	} else {
+		if (p_value == prev_val && p_flip_h == prev_flip_h && p_flip_v == prev_flip_v && p_transpose == prev_transpose && prev_position == position)
+			return; // Check that it's actually different.
+	}
 
 	for (int y = p_pos.y - 1; y <= p_pos.y + 1; y++) {
 		for (int x = p_pos.x - 1; x <= p_pos.x + 1; x++) {
@@ -331,7 +356,34 @@ void TileMapEditor::_set_cell(const Point2i &p_pos, Vector<int> p_values, bool p
 		}
 	}
 
-	node->_set_celld(p_pos, _create_cell_dictionary(p_value, p_flip_h, p_flip_v, p_transpose, p_autotile_coord));
+	if (p_value != -1 && node->get_tileset()->tile_get_tile_mode(p_value) == TileSet::AUTO_TILE && !manual_autotile) {
+		//node->calculate_autotile_coord(p_pos.x, p_pos.y, p_value, p_flip_h, p_flip_v, p_transpose, position, TileSet::BIND_TOPLEFT);
+		//node->calculate_autotile_coord(p_pos.x - 1, p_pos.y, p_value, p_flip_h, p_flip_v, p_transpose, position, TileSet::BIND_TOPRIGHT);
+		//node->calculate_autotile_coord(p_pos.x, p_pos.y - 1, p_value, p_flip_h, p_flip_v, p_transpose, position, TileSet::BIND_BOTTOMLEFT);
+		//node->calculate_autotile_coord(p_pos.x + 1, p_pos.y, position);
+		//node->calculate_autotile_coord(p_pos.x, p_pos.y + 1, position);
+		//node->calculate_autotile_coord(p_pos.x - 1, p_pos.y - 1, p_value, p_flip_h, p_flip_v, p_transpose, position, TileSet::BIND_BOTTOMRIGHT);
+		//node->calculate_autotile_coord(p_pos.x + 1, p_pos.y - 1, position);
+		//node->calculate_autotile_coord(p_pos.x - 1, p_pos.y + 1, position);
+		//node->calculate_autotile_coord(p_pos.x + 1, p_pos.y + 1, position);
+
+		node->_set_celld(p_pos, _create_cell_dictionary(p_value, p_flip_h, p_flip_v, p_transpose, position));
+
+		Map<Vector2i, Vector2> cells_data;
+		bool is_resolved = node->solver_autotile_coord(cells_data, p_pos.x, p_pos.y, p_value, position, TileSet::BIND_TOPLEFT, TileSet::BIND_TOPLEFT, 2);
+		if (is_resolved) {
+			ERR_PRINT("resolved: " + itos(cells_data.size()))
+			for (Map<Vector2i, Vector2>::Element *E = cells_data.front(); E; E = E->next()) {
+				node->_set_celld(E->key(), _create_cell_dictionary(p_value, false, false, false, E->value()));
+			}
+		} else {
+			ERR_PRINT("not resolved")
+		}
+
+		return;
+	} else {
+		node->_set_celld(p_pos, _create_cell_dictionary(p_value, p_flip_h, p_flip_v, p_transpose, p_autotile_coord));
+	}
 
 	if (tool == TOOL_PASTING)
 		return;
@@ -341,7 +393,7 @@ void TileMapEditor::_set_cell(const Point2i &p_pos, Vector<int> p_values, bool p
 			node->set_cell_autotile_coord(p_pos.x, p_pos.y, position);
 		} else if (node->get_tileset()->tile_get_tile_mode(p_value) == TileSet::ATLAS_TILE && priority_atlastile) {
 			// BIND_CENTER is used to indicate that bitmask should not update for this tile cell.
-			node->get_tileset()->autotile_set_bitmask(p_value, Vector2(p_pos.x, p_pos.y), TileSet::BIND_CENTER);
+			node->get_tileset()->autotile_set_bitmask_layer(p_value, Vector2(p_pos.x, p_pos.y), 0, TileSet::BIND_CENTER);
 			node->update_cell_bitmask(p_pos.x, p_pos.y);
 		}
 	} else {
@@ -525,12 +577,16 @@ void TileMapEditor::_update_palette() {
 		sel_tile = palette->get_selected_items().get(0);
 	}
 
-	if (sel_tile != TileMap::INVALID_CELL && ((manual_autotile && tileset->tile_get_tile_mode(sel_tile) == TileSet::AUTO_TILE) || (!priority_atlastile && tileset->tile_get_tile_mode(sel_tile) == TileSet::ATLAS_TILE))) {
+	if (sel_tile != TileMap::INVALID_CELL && (tileset->tile_get_tile_mode(sel_tile) == TileSet::AUTO_TILE || (!priority_atlastile && tileset->tile_get_tile_mode(sel_tile) == TileSet::ATLAS_TILE))) {
 
-		const Map<Vector2, uint32_t> &tiles2 = tileset->autotile_get_bitmask_map(sel_tile);
+		bool bitmask_unique_layer_only = false;
+		if (!manual_autotile && tileset->tile_get_tile_mode(sel_tile) == TileSet::AUTO_TILE) {
+			bitmask_unique_layer_only = true;
+		}
+		const Map<Vector2, Map<uint8_t, uint32_t> > &tiles2 = tileset->autotile_get_bitmask_map(sel_tile, bitmask_unique_layer_only);
 
 		Vector<Vector2> entries2;
-		for (const Map<Vector2, uint32_t>::Element *E = tiles2.front(); E; E = E->next()) {
+		for (const Map<Vector2, Map<uint8_t, uint32_t> >::Element *E = tiles2.front(); E; E = E->next()) {
 			entries2.push_back(E->key());
 		}
 		// Sort tiles in row-major order.
@@ -552,7 +608,7 @@ void TileMapEditor::_update_palette() {
 				Rect2 region = tileset->tile_get_region(sel_tile);
 				int spacing = tileset->autotile_get_spacing(sel_tile);
 				region.size = tileset->autotile_get_size(sel_tile); // !!
-				region.position += (region.size + Vector2(spacing, spacing)) * entries2[i];
+				region.position += (region.size + Vector2(spacing, spacing)) * Vector2(entries2[i].x, entries2[i].y);
 
 				if (!region.has_no_area())
 					manual_palette->set_item_icon_region(manual_palette->get_item_count() - 1, region);
@@ -604,7 +660,7 @@ void TileMapEditor::_pick_tile(const Point2 &p_pos) {
 	set_selected_tiles(selected);
 	_update_palette();
 
-	if ((manual_autotile && node->get_tileset()->tile_get_tile_mode(id) == TileSet::AUTO_TILE) || (!priority_atlastile && node->get_tileset()->tile_get_tile_mode(id) == TileSet::ATLAS_TILE)) {
+	if (node->get_tileset()->tile_get_tile_mode(id) == TileSet::AUTO_TILE || (!priority_atlastile && node->get_tileset()->tile_get_tile_mode(id) == TileSet::ATLAS_TILE)) {
 		manual_palette->select(manual_palette->find_metadata((Point2)autotile_coord));
 	}
 
@@ -786,7 +842,7 @@ void TileMapEditor::_draw_cell(Control *p_viewport, int p_cell, const Point2i &p
 		Vector2 offset;
 		if (tool != TOOL_PASTING) {
 			int selected = manual_palette->get_current();
-			if ((manual_autotile || (node->get_tileset()->tile_get_tile_mode(p_cell) == TileSet::ATLAS_TILE && !priority_atlastile)) && selected != -1) {
+			if ((node->get_tileset()->tile_get_tile_mode(p_cell) == TileSet::AUTO_TILE || (node->get_tileset()->tile_get_tile_mode(p_cell) == TileSet::ATLAS_TILE && !priority_atlastile)) && selected != -1) {
 				offset = manual_palette->get_item_metadata(selected);
 			} else {
 				offset = node->get_tileset()->autotile_get_icon_coordinate(p_cell);

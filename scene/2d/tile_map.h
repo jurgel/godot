@@ -273,6 +273,11 @@ public:
 	void update_bitmask_area(const Vector2 &p_pos);
 	void update_bitmask_region(const Vector2 &p_start = Vector2(), const Vector2 &p_end = Vector2());
 	void update_cell_bitmask(int p_x, int p_y);
+	void calculate_autotile_coord(int p_x, int p_y, int p_tile, bool p_flip_x = false, bool p_flip_y = false, bool p_transpose = false, Vector2 p_autotile_coord = Vector2(), uint16_t p_bitmask = 0);
+	bool check_bitmask_data(Vector2i p_data_pos, Map<uint8_t, uint32_t> p_data_bitmask, int p_x, int p_y, Map<uint8_t, uint32_t> p_bitmask, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter);
+	int check_autotile_bitmask(Map<Vector2i, Map<uint8_t, uint32_t> > &p_data, Map<uint8_t, uint16_t> &p_banned_bitmask, int p_x, int p_y, int p_id, int p_tile, Map<uint8_t, uint32_t> p_bitmask, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter, int ori_x, int ori_y, int max_distance);
+	int solver_autotile_bitmask(Map<Vector2i, Map<uint8_t, uint32_t> > &p_data, int p_x, int p_y, int p_tile, Map<uint8_t, uint32_t> p_bitmask, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter, int ori_x, int ori_y, int max_distance);
+	bool solver_autotile_coord(Map<Vector2i, Vector2> &p_data, int p_x, int p_y, int p_tile, Vector2 p_coord, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter, int max_depth);
 	void update_dirty_bitmask();
 
 	void update_dirty_quadrants();

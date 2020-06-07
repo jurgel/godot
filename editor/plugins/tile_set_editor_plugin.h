@@ -125,7 +125,7 @@ class TileSetEditor : public HSplitContainer {
 	Vector2 edited_shape_coord;
 	PoolVector2Array current_shape;
 	Map<Vector2i, SubtileData> current_tile_data;
-	Map<Vector2, uint32_t> bitmask_map_copy;
+	Map<Vector2, Map<uint8_t, uint32_t> > bitmask_map_copy;
 
 	Vector2 snap_step;
 	Vector2 snap_offset;
@@ -152,11 +152,13 @@ class TileSetEditor : public HSplitContainer {
 	VSeparator *separator_bitmask;
 	VSeparator *separator_delete;
 	VSeparator *separator_grid;
+	SpinBox *spin_bitmask;
 	SpinBox *spin_priority;
 	SpinBox *spin_z_index;
 	WorkspaceMode workspace_mode;
 	EditMode edit_mode;
 	int current_tile;
+	int current_bitmask_layer;
 
 	float max_scale;
 	float min_scale;
@@ -203,6 +205,7 @@ private:
 	void _on_workspace_process();
 	void _on_workspace_input(const Ref<InputEvent> &p_ie);
 	void _on_tool_clicked(int p_tool);
+	void _on_bitmask_layer_changed(float val);
 	void _on_priority_changed(float val);
 	void _on_z_index_changed(float val);
 	void _on_grid_snap_toggled(bool p_val);

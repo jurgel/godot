@@ -96,7 +96,7 @@ public:
 		Size2 size;
 		int spacing;
 		Vector2 icon_coord;
-		Map<Vector2, uint32_t> flags;
+		Map<Vector2, Map<uint8_t, uint32_t> > flags;
 		Map<Vector2, Ref<OccluderPolygon2D> > occluder_map;
 		Map<Vector2, Ref<NavigationPolygon> > navpoly_map;
 		Map<Vector2, int> priority_map;
@@ -191,10 +191,15 @@ public:
 	int autotile_get_z_index(int p_id, const Vector2 &p_coord);
 	const Map<Vector2, int> &autotile_get_z_index_map(int p_id) const;
 
-	void autotile_set_bitmask(int p_id, Vector2 p_coord, uint32_t p_flag);
-	uint32_t autotile_get_bitmask(int p_id, Vector2 p_coord);
-	const Map<Vector2, uint32_t> &autotile_get_bitmask_map(int p_id);
-	Vector2 autotile_get_subtile_for_bitmask(int p_id, uint16_t p_bitmask, const Node *p_tilemap_node = NULL, const Vector2 &p_tile_location = Vector2());
+	void autotile_set_bitmask(int p_id, Vector2 p_coord, Map<uint8_t, uint32_t> p_flag);
+	void autotile_set_bitmask_layer(int p_id, Vector2 p_coord, uint8_t p_layer, uint32_t p_flag);
+	Map<uint8_t, uint32_t> autotile_get_bitmask(int p_id, Vector2 p_coord);
+	uint32_t autotile_get_bitmask_layer(int p_id, Vector2 p_coord, uint8_t p_layer);
+	const Map<Vector2, Map<uint8_t, uint32_t> > &autotile_get_bitmask_map(int p_id, bool p_unique_layer_only = false);
+	bool autotile_is_bitmask_valid(Map<uint8_t, uint32_t> p_candidate_bitmask, Map<uint8_t, uint32_t> p_target_bitmask, uint16_t p_mask_needed);
+	List<Vector2> autotile_get_all_subtile_for_bitmask(int p_id, Map<uint8_t, uint32_t> p_bitmask);
+	Vector<Map<uint8_t, uint32_t> > autotile_get_all_valid_bitmask(int p_id, Map<uint8_t, uint32_t> p_bitmask);
+	Vector2 autotile_get_subtile_for_bitmask(int p_id, Map<uint8_t, uint32_t> p_bitmask, const Node *p_tilemap_node = NULL, const Vector2 &p_tile_location = Vector2(), const Vector2 &p_default_coord = Vector2());
 	Vector2 atlastile_get_subtile_by_priority(int p_id, const Node *p_tilemap_node = NULL, const Vector2 &p_tile_location = Vector2());
 
 	void tile_set_shape(int p_id, int p_shape_id, const Ref<Shape2D> &p_shape);
@@ -253,6 +258,8 @@ public:
 	bool has_tile(int p_id) const;
 
 	bool is_tile_bound(int p_drawn_id, int p_neighbor_id);
+	int get_tile_mask_layer(Map<uint8_t, uint32_t> p_bitmask, uint16_t p_mask);
+	int get_tile_mask_bound(int p_drawn_id, int p_neighbor_id, const Vector2 &p_neighbor_autotile_coord, uint16_t p_mask);
 
 	int find_tile_by_name(const String &p_name) const;
 	void get_tile_list(List<int> *p_tiles) const;

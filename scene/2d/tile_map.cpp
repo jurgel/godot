@@ -928,7 +928,9 @@ void TileMap::update_bitmask_area(const Vector2 &p_pos) {
 
 	for (int x = p_pos.x - 1; x <= p_pos.x + 1; x++) {
 		for (int y = p_pos.y - 1; y <= p_pos.y + 1; y++) {
-			update_cell_bitmask(x, y);
+			if (p_pos.x != x && p_pos.y != y) {
+				update_cell_bitmask(x, y);
+			}
 		}
 	}
 }
@@ -958,63 +960,114 @@ void TileMap::update_cell_bitmask(int p_x, int p_y) {
 	if (E != NULL) {
 		int id = get_cell(p_x, p_y);
 		if (tile_set->tile_get_tile_mode(id) == TileSet::AUTO_TILE) {
-			uint16_t mask = 0;
-			if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_2X2) {
-				if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
-					mask |= TileSet::BIND_TOPLEFT;
-				}
-				if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
-					mask |= TileSet::BIND_TOPRIGHT;
-				}
-				if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
-					mask |= TileSet::BIND_BOTTOMLEFT;
-				}
-				if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
-					mask |= TileSet::BIND_BOTTOMRIGHT;
-				}
-			} else {
-				if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_3X3_MINIMAL) {
-					if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
-						mask |= TileSet::BIND_TOPLEFT;
+			Vector2 cur_coord = get_cell_autotile_coord(p_x, p_y);
+			Map<uint8_t, uint32_t> cur_masks = tile_set->autotile_get_bitmask(id, cur_coord);
+			Map<uint8_t, uint32_t> masks;
+			uint16_t mask_needed = 0;
+			uint8_t layer_;
+
+			mask_needed |= (TileSet::BIND_TOPLEFT | TileSet::BIND_TOPRIGHT | TileSet::BIND_BOTTOMLEFT | TileSet::BIND_BOTTOMRIGHT);
+			if (tile_set->autotile_get_bitmask_mode(id) != TileSet::BITMASK_2X2) {
+				mask_needed |= (TileSet::BIND_TOP | TileSet::BIND_LEFT | TileSet::BIND_CENTER | TileSet::BIND_RIGHT | TileSet::BIND_BOTTOM);
+			}
+
+			for (Map<uint8_t, uint32_t>::Element *F = cur_masks.front(); F; F = F->next()) {
+				uint8_t layer = F->key();
+				uint16_t mask = 0;
+				if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_2X2) {
+					if (mask_needed & TileSet::BIND_TOPLEFT) {
+						layer_ = -1;
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y - 1), get_cell_autotile_coord(p_x - 1, p_y - 1), TileSet::BIND_BOTTOMRIGHT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y - 1), get_cell_autotile_coord(p_x, p_y - 1), TileSet::BIND_BOTTOMLEFT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y), get_cell_autotile_coord(p_x - 1, p_y), TileSet::BIND_TOPRIGHT);
+
+						if (layer_ >= 0) {
+							masks[layer_] |= TileSet::BIND_TOPLEFT;
+							mask_needed &= (~TileSet::BIND_TOPLEFT);
+						}
 					}
-					if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
-						mask |= TileSet::BIND_TOPRIGHT;
+
+					if (mask_needed & TileSet::BIND_TOPRIGHT) {
+						layer_ = -1;
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y - 1), get_cell_autotile_coord(p_x + 1, p_y - 1), TileSet::BIND_BOTTOMLEFT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y - 1), get_cell_autotile_coord(p_x, p_y - 1), TileSet::BIND_BOTTOMRIGHT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y), get_cell_autotile_coord(p_x + 1, p_y), TileSet::BIND_TOPLEFT);
+
+						if (layer_ >= 0) {
+							masks[layer_] |= TileSet::BIND_TOPRIGHT;
+							mask_needed &= (~TileSet::BIND_TOPRIGHT);
+						}
 					}
-					if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
-						mask |= TileSet::BIND_BOTTOMLEFT;
+
+					if (mask_needed & TileSet::BIND_BOTTOMLEFT) {
+						layer_ = -1;
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y + 1), get_cell_autotile_coord(p_x - 1, p_y + 1), TileSet::BIND_TOPRIGHT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y + 1), get_cell_autotile_coord(p_x, p_y + 1), TileSet::BIND_TOPLEFT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y), get_cell_autotile_coord(p_x - 1, p_y), TileSet::BIND_BOTTOMRIGHT);
+
+						if (layer_ >= 0) {
+							masks[layer_] |= TileSet::BIND_BOTTOMLEFT;
+							mask_needed &= (~TileSet::BIND_BOTTOMLEFT);
+						}
 					}
-					if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
-						mask |= TileSet::BIND_BOTTOMRIGHT;
+
+					if (mask_needed & TileSet::BIND_BOTTOMRIGHT) {
+						layer_ = -1;
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y + 1), get_cell_autotile_coord(p_x + 1, p_y + 1), TileSet::BIND_TOPLEFT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y + 1), get_cell_autotile_coord(p_x, p_y + 1), TileSet::BIND_TOPRIGHT);
+						layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y), get_cell_autotile_coord(p_x + 1, p_y), TileSet::BIND_BOTTOMLEFT);
+
+						if (layer_ >= 0) {
+							masks[layer_] |= TileSet::BIND_BOTTOMRIGHT;
+							mask_needed &= (~TileSet::BIND_BOTTOMRIGHT);
+						}
 					}
 				} else {
-					if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y - 1))) {
-						mask |= TileSet::BIND_TOPLEFT;
+					if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_3X3_MINIMAL) {
+						if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
+							mask |= TileSet::BIND_TOPLEFT;
+						}
+						if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
+							mask |= TileSet::BIND_TOPRIGHT;
+						}
+						if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
+							mask |= TileSet::BIND_BOTTOMLEFT;
+						}
+						if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
+							mask |= TileSet::BIND_BOTTOMRIGHT;
+						}
+					} else {
+						if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y - 1))) {
+							mask |= TileSet::BIND_TOPLEFT;
+						}
+						if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y - 1))) {
+							mask |= TileSet::BIND_TOPRIGHT;
+						}
+						if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y + 1))) {
+							mask |= TileSet::BIND_BOTTOMLEFT;
+						}
+						if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y + 1))) {
+							mask |= TileSet::BIND_BOTTOMRIGHT;
+						}
 					}
-					if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y - 1))) {
-						mask |= TileSet::BIND_TOPRIGHT;
+					if (tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1))) {
+						mask |= TileSet::BIND_TOP;
 					}
-					if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y + 1))) {
-						mask |= TileSet::BIND_BOTTOMLEFT;
+					if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
+						mask |= TileSet::BIND_LEFT;
 					}
-					if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y + 1))) {
-						mask |= TileSet::BIND_BOTTOMRIGHT;
+					mask |= TileSet::BIND_CENTER;
+					if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
+						mask |= TileSet::BIND_RIGHT;
+					}
+					if (tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1))) {
+						mask |= TileSet::BIND_BOTTOM;
 					}
 				}
-				if (tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1))) {
-					mask |= TileSet::BIND_TOP;
-				}
-				if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
-					mask |= TileSet::BIND_LEFT;
-				}
-				mask |= TileSet::BIND_CENTER;
-				if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
-					mask |= TileSet::BIND_RIGHT;
-				}
-				if (tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1))) {
-					mask |= TileSet::BIND_BOTTOM;
-				}
+
+				masks[layer] = mask;
 			}
-			Vector2 coord = tile_set->autotile_get_subtile_for_bitmask(id, mask, this, Vector2(p_x, p_y));
+			Vector2 coord = tile_set->autotile_get_subtile_for_bitmask(id, masks, this, Vector2(p_x, p_y), cur_coord);
 			E->get().autotile_coord_x = (int)coord.x;
 			E->get().autotile_coord_y = (int)coord.y;
 
@@ -1028,7 +1081,7 @@ void TileMap::update_cell_bitmask(int p_x, int p_y) {
 			E->get().autotile_coord_y = 0;
 		} else if (tile_set->tile_get_tile_mode(id) == TileSet::ATLAS_TILE) {
 
-			if (tile_set->autotile_get_bitmask(id, Vector2(p_x, p_y)) == TileSet::BIND_CENTER) {
+			if (tile_set->autotile_get_bitmask(id, Vector2(p_x, p_y))[0] == TileSet::BIND_CENTER) {
 				Vector2 coord = tile_set->atlastile_get_subtile_by_priority(id, this, Vector2(p_x, p_y));
 
 				E->get().autotile_coord_x = (int)coord.x;
@@ -1036,6 +1089,566 @@ void TileMap::update_cell_bitmask(int p_x, int p_y) {
 			}
 		}
 	}
+}
+
+void TileMap::calculate_autotile_coord(int p_x, int p_y, int p_tile, bool p_flip_x, bool p_flip_y, bool p_transpose, Vector2 p_autotile_coord, uint16_t p_bitmask) {
+
+	ERR_FAIL_COND_MSG(tile_set.is_null(), "Cannot calculate cell bitmask if Tileset is not open.");
+
+	int prev_id = get_cell(p_x, p_y);
+	Vector2 prev_autotile_coord = get_cell_autotile_coord(p_x, p_y);
+	Map<uint8_t, uint32_t> prev_masks;
+
+	set_cell(p_x, p_y, p_tile, p_flip_x, p_flip_y, p_transpose, p_autotile_coord);
+
+	PosKey pk(p_x, p_y);
+	const Map<PosKey, Cell>::Element *E = tile_map.find(pk);
+	if (!E)
+		return;
+
+	int id = get_cell(p_x, p_y);
+	if (tile_set->tile_get_tile_mode(id) != TileSet::AUTO_TILE)
+		return;
+
+	if (id == prev_id) {
+		prev_masks = tile_set->autotile_get_bitmask(prev_id, prev_autotile_coord);
+	}
+
+	Cell c = E->get();
+	Map<uint8_t, uint32_t> new_masks = tile_set->autotile_get_bitmask(id, p_autotile_coord);
+	Map<uint8_t, uint32_t> masks;
+	uint16_t mask_param = p_bitmask;
+	uint16_t mask_needed = 0;
+	uint16_t mask_;
+	int layer_ = -1;
+
+	mask_needed |= (TileSet::BIND_TOPLEFT | TileSet::BIND_TOPRIGHT | TileSet::BIND_BOTTOMLEFT | TileSet::BIND_BOTTOMRIGHT);
+	if (tile_set->autotile_get_bitmask_mode(id) != TileSet::BITMASK_2X2) {
+		mask_needed |= (TileSet::BIND_TOP | TileSet::BIND_LEFT | TileSet::BIND_CENTER | TileSet::BIND_RIGHT | TileSet::BIND_BOTTOM);
+	}
+
+	for (Map<uint8_t, uint32_t>::Element *F = new_masks.front(); F && mask_param; F = F->next()) {
+		mask_ = F->value() & mask_param;
+		if (mask_) {
+			masks[F->key()] |= mask_;
+			mask_param &= (~mask_);
+			mask_needed &= (~mask_);
+		}
+	}
+
+	if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_2X2) {
+
+		if (mask_needed & TileSet::BIND_TOPLEFT) {
+			layer_ = -1;
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y - 1), get_cell_autotile_coord(p_x - 1, p_y - 1), TileSet::BIND_BOTTOMRIGHT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y - 1), get_cell_autotile_coord(p_x, p_y - 1), TileSet::BIND_BOTTOMLEFT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y), get_cell_autotile_coord(p_x - 1, p_y), TileSet::BIND_TOPRIGHT);
+
+			if (layer_ >= 0) {
+				masks[layer_] |= TileSet::BIND_TOPLEFT;
+				mask_needed &= (~TileSet::BIND_TOPLEFT);
+			}
+		}
+
+		if (mask_needed & TileSet::BIND_TOPRIGHT) {
+			layer_ = -1;
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y - 1), get_cell_autotile_coord(p_x + 1, p_y - 1), TileSet::BIND_BOTTOMLEFT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y - 1), get_cell_autotile_coord(p_x, p_y - 1), TileSet::BIND_BOTTOMRIGHT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y), get_cell_autotile_coord(p_x + 1, p_y), TileSet::BIND_TOPLEFT);
+
+			if (layer_ >= 0) {
+				masks[layer_] |= TileSet::BIND_TOPRIGHT;
+				mask_needed &= (~TileSet::BIND_TOPRIGHT);
+			}
+		}
+
+		if (mask_needed & TileSet::BIND_BOTTOMLEFT) {
+			layer_ = -1;
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y + 1), get_cell_autotile_coord(p_x - 1, p_y + 1), TileSet::BIND_TOPRIGHT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y + 1), get_cell_autotile_coord(p_x, p_y + 1), TileSet::BIND_TOPLEFT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x - 1, p_y), get_cell_autotile_coord(p_x - 1, p_y), TileSet::BIND_BOTTOMRIGHT);
+
+			if (layer_ >= 0) {
+				masks[layer_] |= TileSet::BIND_BOTTOMLEFT;
+				mask_needed &= (~TileSet::BIND_BOTTOMLEFT);
+			}
+		}
+
+		if (mask_needed & TileSet::BIND_BOTTOMRIGHT) {
+			layer_ = -1;
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y + 1), get_cell_autotile_coord(p_x + 1, p_y + 1), TileSet::BIND_TOPLEFT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x, p_y + 1), get_cell_autotile_coord(p_x, p_y + 1), TileSet::BIND_TOPRIGHT);
+			layer_ = layer_ >= 0 ? layer_ : tile_set->get_tile_mask_bound(id, get_cell(p_x + 1, p_y), get_cell_autotile_coord(p_x + 1, p_y), TileSet::BIND_BOTTOMLEFT);
+
+			if (layer_ >= 0) {
+				masks[layer_] |= TileSet::BIND_BOTTOMRIGHT;
+				mask_needed &= (~TileSet::BIND_BOTTOMRIGHT);
+			}
+		}
+	} else {
+		if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_3X3_MINIMAL) {
+			if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
+				masks[layer_] |= TileSet::BIND_TOPLEFT;
+			}
+			if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
+				masks[layer_] |= TileSet::BIND_TOPRIGHT;
+			}
+			if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
+				masks[layer_] |= TileSet::BIND_BOTTOMLEFT;
+			}
+			if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1)) && tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
+				masks[layer_] |= TileSet::BIND_BOTTOMRIGHT;
+			}
+		} else {
+			if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y - 1))) {
+				masks[layer_] |= TileSet::BIND_TOPLEFT;
+			}
+			if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y - 1))) {
+				masks[layer_] |= TileSet::BIND_TOPRIGHT;
+			}
+			if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y + 1))) {
+				masks[layer_] |= TileSet::BIND_BOTTOMLEFT;
+			}
+			if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y + 1))) {
+				masks[layer_] |= TileSet::BIND_BOTTOMRIGHT;
+			}
+		}
+		if (tile_set->is_tile_bound(id, get_cell(p_x, p_y - 1))) {
+			masks[layer_] |= TileSet::BIND_TOP;
+		}
+		if (tile_set->is_tile_bound(id, get_cell(p_x - 1, p_y))) {
+			masks[layer_] |= TileSet::BIND_LEFT;
+		}
+		masks[layer_] |= TileSet::BIND_CENTER;
+		if (tile_set->is_tile_bound(id, get_cell(p_x + 1, p_y))) {
+			masks[layer_] |= TileSet::BIND_RIGHT;
+		}
+		if (tile_set->is_tile_bound(id, get_cell(p_x, p_y + 1))) {
+			masks[layer_] |= TileSet::BIND_BOTTOM;
+		}
+	}
+
+	if (prev_id == id) {
+		for (Map<uint8_t, uint32_t>::Element *F = prev_masks.front(); F && mask_needed; F = F->next()) {
+			mask_ = F->value() & mask_needed;
+			if (mask_) {
+				masks[F->key()] |= mask_;
+				mask_needed &= (~mask_);
+			}
+		}
+
+		/*
+		for (uint16_t bit = 1; bit < (1 << 15); bit <<= 1) {
+			if (!(bit & (TileSet::BIND_TOPLEFT | TileSet::BIND_TOP | TileSet::BIND_TOPRIGHT |
+								TileSet::BIND_LEFT | TileSet::BIND_CENTER | TileSet::BIND_RIGHT |
+								TileSet::BIND_BOTTOMLEFT | TileSet::BIND_BOTTOM | TileSet::BIND_BOTTOMRIGHT))) {
+				continue;
+			}
+			if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_2X2) {
+				if (!(bit & (TileSet::BIND_TOPLEFT | TileSet::BIND_TOPRIGHT | TileSet::BIND_BOTTOMLEFT | TileSet::BIND_BOTTOMRIGHT))) {
+					continue;
+				}
+			}
+
+			bool found = false;
+			for (Map<uint8_t, uint16_t>::Element *F = masks.front(); F; F = F->next()) {
+				if (F->value() & bit) {
+					found = true;
+					break;
+				}
+			}
+			if (found)
+				continue;
+
+			for (Map<uint8_t, uint32_t>::Element *F = prev_masks.front(); F; F = F->next()) {
+				if (F->value() & bit) {
+					masks[F->key()] |= bit;
+					found = true;
+					break;
+				}
+			}
+			if (found)
+				continue;
+		}
+		*/
+	}
+
+	ERR_PRINT("====== POS: " + itos(p_x) + "," + itos(p_y))
+	for (Map<uint8_t, uint32_t>::Element *F = masks.front(); F; F = F->next()) {
+		String tl = itos(F->value() & TileSet::BIND_TOPLEFT);
+		String tr = itos(F->value() & TileSet::BIND_TOPRIGHT);
+		String bl = itos(F->value() & TileSet::BIND_BOTTOMLEFT);
+		String br = itos(F->value() & TileSet::BIND_BOTTOMRIGHT);
+		ERR_PRINT("apply mask: " + itos(F->key()) + " | " + tl + "," + tr + "," + bl + "," + br)
+	}
+
+	Vector2 new_coord = tile_set->autotile_get_subtile_for_bitmask(id, masks, this, Vector2(p_x, p_y), p_autotile_coord);
+
+	c.autotile_coord_x = (int)new_coord.x;
+	c.autotile_coord_y = (int)new_coord.y;
+	tile_map[pk] = c;
+
+	PosKey qk = pk.to_quadrant(_get_quadrant_size());
+	Map<PosKey, Quadrant>::Element *Q = quadrant_map.find(qk);
+
+	if (!Q)
+		return;
+
+	_make_quadrant_dirty(Q);
+}
+
+bool TileMap::check_bitmask_data(Vector2i p_data_pos, Map<uint8_t, uint32_t> p_data_bitmask, int p_x, int p_y, Map<uint8_t, uint32_t> p_bitmask, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter) {
+
+	if (p_data_pos.x == p_x && p_data_pos.y == p_y) {
+		int layer_ = tile_set->get_tile_mask_layer(p_data_bitmask, p_bitmask_ref);
+		if ((!p_bitmask.has(layer_)) || (!(p_bitmask[layer_] & p_bitmask_filter))) {
+			ERR_PRINT("invalid p_data: " + itos(p_x) + "," + itos(p_y) + " -> " + itos(layer_));
+			return false;
+		}
+	}
+	return true;
+}
+
+int TileMap::check_autotile_bitmask(Map<Vector2i, Map<uint8_t, uint32_t> > &p_data, Map<uint8_t, uint16_t> &p_banned_bitmask, int p_x, int p_y, int p_id, int p_tile, Map<uint8_t, uint32_t> p_bitmask, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter, int ori_x, int ori_y, int max_distance) {
+
+	Vector2i pos = Vector2i(p_x, p_y);
+	int layer_;
+
+	if (p_data.has(pos)) {
+		layer_ = tile_set->get_tile_mask_layer(p_data[pos], p_bitmask_filter);
+		ERR_PRINT("layer from data: " + itos(p_x) + "," + itos(p_y) + " -> " + itos(layer_));
+	} else {
+		int cell_ = get_cell(pos.x, pos.y);
+		Vector2 coord_ = get_cell_autotile_coord(pos.x, pos.y);
+		layer_ = tile_set->get_tile_mask_bound(p_id, cell_, coord_, p_bitmask_filter);
+		ERR_PRINT("layer from cell: " + itos(p_x) + "," + itos(p_y) + " -> " + itos(layer_));
+	}
+
+	bool invalid_ = layer_ >= 0 && !(p_bitmask[layer_] & p_bitmask_ref);
+	if (invalid_) {
+		ERR_PRINT("invalid: " + itos(p_x) + "," + itos(p_y));
+		int cost_ = solver_autotile_bitmask(p_data, p_x, p_y, p_tile, p_bitmask, p_bitmask_ref, p_bitmask_filter, ori_x, ori_y, max_distance);
+		ERR_PRINT("cost: " + itos(p_x) + "," + itos(p_y) + " -> " + itos(cost_));
+		if (cost_ >= 0) {
+			return cost_ + 1;
+		} else {
+			layer_ = tile_set->get_tile_mask_layer(p_bitmask, p_bitmask_ref);
+			p_banned_bitmask[layer_] |= p_bitmask_ref;
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int TileMap::solver_autotile_bitmask(Map<Vector2i, Map<uint8_t, uint32_t> > &p_data, int p_x, int p_y, int p_tile, Map<uint8_t, uint32_t> p_bitmask, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter, int ori_x, int ori_y, int max_distance) {
+
+	ERR_FAIL_COND_V_MSG(tile_set.is_null(), -1, "Cannot solve cell bitmask if Tileset is not open.");
+
+	ERR_PRINT("=== try solve #" + itos(max_distance) + " | " + itos(p_x) + "," + itos(p_y))
+
+	if (abs(p_x - ori_x) > max_distance || abs(p_y - ori_y) > max_distance)
+		return 0;
+
+	Vector2i pos(p_x, p_y);
+	if (p_data.has(pos)) {
+		ERR_PRINT("already has " + itos(p_x) + "," + itos(p_y))
+		int layer_ = tile_set->get_tile_mask_layer(p_bitmask, p_bitmask_ref);
+		if (layer_ < 0)
+			return -1;
+
+		if (p_data[pos][layer_] & p_bitmask_filter)
+			return 0;
+		else
+			return -1;
+	}
+
+	int prev_id = get_cell(p_x, p_y);
+	Vector2 prev_coord = get_cell_autotile_coord(p_x, p_y);
+	Map<uint8_t, uint32_t> prev_bitmasks;
+
+	PosKey pk(p_x, p_y);
+	const Map<PosKey, Cell>::Element *E = tile_map.find(pk);
+	if (!E)
+		return 0;
+
+	int id = E->get().id;
+	if (id != p_tile)
+		return 0;
+
+	if (tile_set->tile_get_tile_mode(id) != TileSet::AUTO_TILE)
+		return 0;
+
+	if (prev_id == id) {
+		prev_bitmasks = tile_set->autotile_get_bitmask(prev_id, prev_coord);
+	} else {
+		prev_bitmasks = p_bitmask;
+	}
+
+	Map<uint8_t, uint32_t> masks;
+	int layer_ = tile_set->get_tile_mask_layer(p_bitmask, p_bitmask_ref);
+	masks[layer_] = p_bitmask_filter;
+
+	Vector<Map<uint8_t, uint32_t> > valid_bitmasks = tile_set->autotile_get_all_valid_bitmask(id, masks);
+	ERR_PRINT("== valid bitmask: " + itos(valid_bitmasks.size()))
+	if (valid_bitmasks.empty())
+		return -1;
+
+	List<Vector2i> bitmask_diffs;
+	int diff;
+	uint16_t diff_;
+	for (int i = 0; i < valid_bitmasks.size(); i++) {
+		diff = 0;
+		for (Map<uint8_t, uint32_t>::Element *F = prev_bitmasks.front(); F; F = F->next()) {
+			if (!valid_bitmasks[i].has(F->key())) {
+				diff_ = F->value() & 0xFFFF;
+				for (; diff_ > 0; diff_ >>= 1) {
+					if (diff_ & 1)
+						diff++;
+				}
+			} else {
+				diff_ = (valid_bitmasks[i][F->key()] ^ F->value()) & 0xFFFF;
+				for (; diff_ > 0; diff_ >>= 1) {
+					if (diff_ & 1)
+						diff++;
+				}
+			}
+		}
+		bitmask_diffs.push_back(Vector2i(i, diff));
+	}
+
+	// Sort valid bitmask in minimal changes order.
+	struct MinimalDiffComparator {
+		bool operator()(const Vector2i &v_l, const Vector2i &v_r) const {
+			return v_l.y < v_r.y;
+		}
+	};
+	bitmask_diffs.sort_custom<MinimalDiffComparator>();
+
+	Map<uint8_t, uint32_t> bitmask_;
+	int cost;
+	int cost_t;
+	int lowest_cost = -1;
+	bool found_;
+	Vector2i pos_;
+	Map<uint8_t, uint16_t> banned_bitmask;
+	for (List<Vector2i>::Element *F = bitmask_diffs.front(); F; F = F->next()) {
+		cost = 0;
+		bitmask_ = valid_bitmasks[F->get().x];
+		p_data[pos] = bitmask_;
+
+		ERR_PRINT("= valid bitmask #" + itos(max_distance) + " | " + itos(F->get().x) + " -> " + itos(p_x) + "," + itos(p_y))
+		for (Map<uint8_t, uint32_t>::Element *G = bitmask_.front(); G; G = G->next()) {
+			String tl = itos(G->value() & TileSet::BIND_TOPLEFT);
+			String tr = itos(G->value() & TileSet::BIND_TOPRIGHT);
+			String bl = itos(G->value() & TileSet::BIND_BOTTOMLEFT);
+			String br = itos(G->value() & TileSet::BIND_BOTTOMRIGHT);
+			ERR_PRINT("valid bitmask: " + itos(G->key()) + " | " + tl + "," + tr + "," + bl + "," + br)
+		}
+
+		found_ = false;
+		for (Map<Vector2i, Map<uint8_t, uint32_t> >::Element *G = p_data.front(); G; G = G->next()) {
+			found_ = !check_bitmask_data(G->key(), G->value(), p_x - 1, p_y - 1, bitmask_, TileSet::BIND_TOPLEFT, TileSet::BIND_BOTTOMRIGHT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x, p_y - 1, bitmask_, TileSet::BIND_TOPLEFT, TileSet::BIND_BOTTOMLEFT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x - 1, p_y, bitmask_, TileSet::BIND_TOPLEFT, TileSet::BIND_TOPRIGHT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x + 1, p_y - 1, bitmask_, TileSet::BIND_TOPRIGHT, TileSet::BIND_BOTTOMLEFT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x, p_y - 1, bitmask_, TileSet::BIND_TOPRIGHT, TileSet::BIND_BOTTOMRIGHT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x + 1, p_y, bitmask_, TileSet::BIND_TOPRIGHT, TileSet::BIND_TOPLEFT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x + 1, p_y + 1, bitmask_, TileSet::BIND_BOTTOMRIGHT, TileSet::BIND_TOPLEFT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x, p_y + 1, bitmask_, TileSet::BIND_BOTTOMRIGHT, TileSet::BIND_TOPRIGHT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x + 1, p_y, bitmask_, TileSet::BIND_BOTTOMRIGHT, TileSet::BIND_BOTTOMLEFT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x - 1, p_y + 1, bitmask_, TileSet::BIND_BOTTOMLEFT, TileSet::BIND_TOPRIGHT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x, p_y + 1, bitmask_, TileSet::BIND_BOTTOMLEFT, TileSet::BIND_TOPLEFT);
+			if (found_)
+				break;
+
+			cost_t = !check_bitmask_data(G->key(), G->value(), p_x - 1, p_y, bitmask_, TileSet::BIND_BOTTOMLEFT, TileSet::BIND_BOTTOMRIGHT);
+			if (found_)
+				break;
+		}
+		if (found_) {
+			ERR_PRINT("invalid p_data")
+			continue;
+		}
+
+		found_ = false;
+		for (Map<uint8_t, uint32_t>::Element *G = bitmask_.front(); G; G = G->next()) {
+			if (!banned_bitmask.has(G->key())) {
+				banned_bitmask[G->key()] = 0;
+				continue;
+			}
+
+			diff_ = G->value() & banned_bitmask[G->key()];
+			if (diff_) {
+				found_ = true;
+				break;
+			}
+		}
+		if (found_) {
+			ERR_PRINT("invalid banned")
+			continue;
+		}
+
+		if (tile_set->autotile_get_bitmask_mode(id) == TileSet::BITMASK_2X2) {
+
+			// Top Left
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x - 1, p_y - 1, id, p_tile, bitmask_, TileSet::BIND_TOPLEFT, TileSet::BIND_BOTTOMRIGHT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x, p_y - 1, id, p_tile, bitmask_, TileSet::BIND_TOPLEFT, TileSet::BIND_BOTTOMLEFT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x - 1, p_y, id, p_tile, bitmask_, TileSet::BIND_TOPLEFT, TileSet::BIND_TOPRIGHT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+
+			// Top Right
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x + 1, p_y - 1, id, p_tile, bitmask_, TileSet::BIND_TOPRIGHT, TileSet::BIND_BOTTOMLEFT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x, p_y - 1, id, p_tile, bitmask_, TileSet::BIND_TOPRIGHT, TileSet::BIND_BOTTOMRIGHT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x + 1, p_y, id, p_tile, bitmask_, TileSet::BIND_TOPRIGHT, TileSet::BIND_TOPLEFT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+
+			// Bottom Right
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x + 1, p_y + 1, id, p_tile, bitmask_, TileSet::BIND_BOTTOMRIGHT, TileSet::BIND_TOPLEFT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x, p_y + 1, id, p_tile, bitmask_, TileSet::BIND_BOTTOMRIGHT, TileSet::BIND_TOPRIGHT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x + 1, p_y, id, p_tile, bitmask_, TileSet::BIND_BOTTOMRIGHT, TileSet::BIND_BOTTOMLEFT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+
+			// Bottom Left
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x - 1, p_y + 1, id, p_tile, bitmask_, TileSet::BIND_BOTTOMLEFT, TileSet::BIND_TOPRIGHT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x, p_y + 1, id, p_tile, bitmask_, TileSet::BIND_BOTTOMLEFT, TileSet::BIND_TOPLEFT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+
+			cost_t = check_autotile_bitmask(p_data, banned_bitmask, p_x - 1, p_y, id, p_tile, bitmask_, TileSet::BIND_BOTTOMLEFT, TileSet::BIND_BOTTOMRIGHT, ori_x, ori_y, max_distance);
+			if (cost_t < 0)
+				continue;
+			cost += cost_t;
+		}
+
+		/*
+		if (lowest_cost == -1 || lowest_cost > cost) {
+			lowest_cost = cost;
+
+
+			if (lowest_cost == 0)
+				break;
+		}
+		*/
+		lowest_cost = cost;
+		break;
+	}
+
+	if (lowest_cost == -1 && p_data.has(pos)) {
+		p_data.erase(pos);
+	}
+
+	ERR_PRINT("=== done #" + itos(max_distance) + " | " + itos(lowest_cost))
+
+	return lowest_cost;
+}
+
+bool TileMap::solver_autotile_coord(Map<Vector2i, Vector2> &p_data, int p_x, int p_y, int p_tile, Vector2 p_coord, uint16_t p_bitmask_ref, uint16_t p_bitmask_filter, int max_depth) {
+
+	ERR_FAIL_COND_V_MSG(tile_set.is_null(), false, "Cannot solve cell bitmask if Tileset is not open.");
+
+	PosKey pk(p_x, p_y);
+	const Map<PosKey, Cell>::Element *E = tile_map.find(pk);
+	if (!E)
+		return false;
+
+	int id = get_cell(p_x, p_y);
+	if (tile_set->tile_get_tile_mode(id) != TileSet::AUTO_TILE)
+		return false;
+
+	Map<Vector2i, Map<uint8_t, uint32_t> > bitmask_data;
+	Map<uint8_t, uint32_t> bitmask_layer = tile_set->autotile_get_bitmask(id, p_coord);
+
+	int result = solver_autotile_bitmask(bitmask_data, p_x, p_y, p_tile, bitmask_layer, p_bitmask_ref, p_bitmask_filter, p_x, p_y, max_depth);
+
+	if (result < 0) {
+		return false;
+	}
+
+	Vector2 coord_;
+	for (Map<Vector2i, Map<uint8_t, uint32_t> >::Element *F = bitmask_data.front(); F; F = F->next()) {
+		ERR_PRINT("====== POS: " + F->key().operator String())
+		for (Map<uint8_t, uint32_t>::Element *G = F->value().front(); G; G = G->next()) {
+			String tl = itos(G->value() & TileSet::BIND_TOPLEFT);
+			String tr = itos(G->value() & TileSet::BIND_TOPRIGHT);
+			String bl = itos(G->value() & TileSet::BIND_BOTTOMLEFT);
+			String br = itos(G->value() & TileSet::BIND_BOTTOMRIGHT);
+			ERR_PRINT("apply mask: " + itos(G->key()) + " | " + tl + "," + tr + "," + bl + "," + br)
+		}
+
+		coord_ = tile_set->autotile_get_subtile_for_bitmask(id, F->value(), this, Vector2(p_x, p_y), p_coord);
+		p_data.insert(F->key(), coord_);
+	}
+
+	return true;
 }
 
 void TileMap::update_dirty_bitmask() {
